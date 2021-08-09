@@ -1,0 +1,119 @@
+define endian=little;
+define alignment=2;
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0  size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+define register offset=64 size=4 [ lr ];
+define register offset=68 size=1 [ fr ];
+
+define pcodeop wfi;
+
+define token instr (16)
+  op16 = (0,  15)
+  op12 = (4,  15)
+  op8  = (8,  15)
+  op7  = (9,  15)
+  op4  = (12, 15)
+
+  imm12s = (0, 11) signed
+  imm8s  = (4, 11) signed
+  imm8   = (4, 11)
+  imm5   = (4, 8)
+  imm4   = (8, 11)
+
+  rd = (0, 3)
+  rs = (4, 7)
+;
+
+attach variables [ rd rs ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+
+:nop is op16=0x0000 {}
+:cfr is op16=0x0001 { fr = 0; }
+:sfr is op16=0x0002 { fr = 1; }
+:ret is op16=0x0003 { return [lr]; }
+:wfi is op16=0x0004 { wfi(); }
+
+:mov rd,"fr"      is op12=0x002 & rd      { rd = zext(fr); }
+:mov rd,"pc"      is op12=0x003 & rd      { rd = inst_start + 4; }
+:rlxs rd          is op12=0x005 & rd      { local nfr = (rd >> 31) != 0; rd = (rd << 1) | zext(fr); fr = nfr; }
+:rrxs rd          is op12=0x006 & rd      { local nfr = (rd & 1) != 0; rd = (rd >> 1) | (zext(fr) << 31); fr = nfr; }
+:lsls rd,#1       is op12=0x007 & rd      { fr = (rd >> 31) != 0; rd = rd << 1; }
+:asrs rd,#1       is op12=0x008 & rd      { fr = (rd & 1) != 0; rd = rd s>> 1; }
+:cmp.gts rd,#0    is op12=0x009 & rd      { fr = rd s> 0; }
+:b rd             is op12=0x00a & rd      { goto [rd]; }
+:bl rd            is op12=0x00b & rd      { lr = inst_next; call [rd]; }
+:ldr lr,[rd],#4   is op12=0x00c & rd & lr { lr = *rd; rd = rd + 4; }
+:str lr,[rd,#-4]! is op12=0x00d & rd & lr { rd = rd - 4; *rd = lr; }
+
+:ldrsb rd,[rs]     is op8=0x01 & rd & rs      { rd = sext(*:1 rs); }
+:ldrsb rd,[rs,r0]  is op8=0x02 & rd & rs & r0 { rd = sext(*:1 (rs + r0)); }
+:ldrsb rd,[rs],#1  is op8=0x03 & rd & rs      { rd = sext(*:1 rs); rs = rs + 1; }
+:ldrb rd,[rs]      is op8=0x04 & rd & rs      { rd = zext(*:1 rs); }
+:ldrb rd,[rs,r0]   is op8=0x05 & rd & rs & r0 { rd = zext(*:1 (rs + r0)); }
+:ldrb rd,[rs],#1   is op8=0x06 & rd & rs      { rd = zext(*:1 rs); rs = rs + 1; }
+:ldrh rd,[rs]      is op8=0x07 & rd & rs      { rd = sext(*:2 rs); }
+:ldrh rd,[rs,r0]   is op8=0x08 & rd & rs & r0 { rd = sext(*:2 (rs + r0)); }
+:ldrh rd,[rs],#2   is op8=0x09 & rd & rs      { rd = sext(*:2 rs); rs = rs + 2; }
+:ldr rd,[rs]       is op8=0x0a & rd & rs      { rd = *rs; }
+:ldr rd,[rs,r0]    is op8=0x0b & rd & rs & r0 { rd = *(rs + r0); }
+:ldr rd,[rs],#4    is op8=0x0c & rd & rs      { rd = *rs; rs = rs + 4; }
+:strb rs,[rd]      is op8=0x0d & rd & rs      { *rd = rs:1; }
+:strb rs,[rd,r0]   is op8=0x0e & rd & rs & r0 { *(rd + r0) = rs:1; }
+:strb rs,[rd],#1   is op8=0x0f & rd & rs      { *rd = rs:1; rd = rd + 1; }
+:strb rs,[rd,-#1]! is op8=0x10 & rd & rs      { rd = rd - 1; *rd = rs:1; }
+:strh rs,[rd]      is op8=0x11 & rd & rs      { *rd = rs:2; }
+:strh rs,[rd,r0]   is op8=0x12 & rd & rs & r0 { *(rd + r0) = rs:2; }
+:strh rs,[rd],#2   is op8=0x13 & rd & rs      { *rd = rs:2; rd = rd + 2; }
+:strh rs,[rd,-#2]! is op8=0x14 & rd & rs      { rd = rd - 2; *rd = rs:2; }
+:str rs,[rd]       is op8=0x15 & rd & rs      { *rd = rs; }
+:str rs,[rd,r0]    is op8=0x16 & rd & rs & r0 { *(rd + r0) = rs; }
+:str rs,[rd],#4    is op8=0x17 & rd & rs      { *rd = rs; rd = rd + 4; }
+:str rs,[rd,-#4]!  is op8=0x18 & rd & rs      { rd = rd - 4; *rd = rs; }
+:sxtb rd,rs        is op8=0x19 & rd & rs      { rd = sext(rs:1); }
+:sxth rd,rs        is op8=0x1a & rd & rs      { rd = sext(rs:2); }
+:mov rd,rs         is op8=0x1b & rd & rs      { rd = rs; }
+:uxtb rd,rs        is op8=0x1c & rd & rs      { rd = zext(rs:1); }
+:uxth rd,rs        is op8=0x1d & rd & rs      { rd = zext(rs:2); }
+:add rd,rs         is op8=0x1e & rd & rs      { rd = rd + rs; }
+:adcs rd,rs        is op8=0x1f & rd & rs      { local nfr = (!fr && rd > rd + rs) || (fr && rd >= rd + rs + 1); rd = rd + rs + zext(fr); fr = nfr; }
+:sub rd,rs         is op8=0x20 & rd & rs      { rd = rd - rs; }
+:sbcs rd,rs        is op8=0x21 & rd & rs      { local nfr = (!fr && rd < rd - rs) || (fr && rd <= rd - rs - 1); rd = rd - rs - zext(fr); fr = nfr; }
+:mul rd,rs         is op8=0x22 & rd & rs      { rd = rd * rs; }
+:and rd,rs         is op8=0x23 & rd & rs      { rd = rd & rs; }
+:orr rd,rs         is op8=0x24 & rd & rs      { rd = rd | rs; }
+:mvn rd,rs         is op8=0x25 & rd & rs      { rd = ~rs; }
+:eor rd,rs         is op8=0x26 & rd & rs      { rd = rd ^ rs; }
+:neg rd,rs         is op8=0x27 & rd & rs      { rd = -rs; }
+:ngcs rd,rs        is op8=0x28 & rd & rs      { rd = -rs - zext(fr); fr = fr || rd != 0; }
+:lsl rd,rs         is op8=0x29 & rd & rs      { rd = rd << rs; }
+:lsr rd,rs         is op8=0x2a & rd & rs      { rd = rd >> rs; }
+:asr rd,rs         is op8=0x2b & rd & rs      { rd = rd s>> rs; }
+:cmp.eq rd,rs      is op8=0x2e & rd & rs      { fr = rd == rs; }
+:cmp.geu rd,rs     is op8=0x2f & rd & rs      { fr = rd >= rs; }
+:cmp.ges rd,rs     is op8=0x30 & rd & rs      { fr = rd s>= rs; }
+:cmp.gtu rd,rs     is op8=0x31 & rd & rs      { fr = rd > rs; }
+:cmp.gts rd,rs     is op8=0x32 & rd & rs      { fr = rd s> rs; }
+:cmp.nand rd,rs    is op8=0x33 & rd & rs      { fr = (rd & rs) == 0; }
+:fadd rd,rs        is op8=0x34 & rd & rs      { rd = rd f+ rs; }
+:fsub rd,rs        is op8=0x35 & rd & rs      { rd = rd f- rs; }
+:fmul rd,rs        is op8=0x36 & rd & rs      { rd = rd f* rs; }
+:fdiv rd,rs        is op8=0x37 & rd & rs      { rd = rd f/ rs; }
+:ftosi rd,rs       is op8=0x38 & rd & rs      { rd = trunc(rs); }
+:fsito rd,rs       is op8=0x39 & rd & rs      { rd = int2float(rs); }
+
+:ldrh rd,["pc",#imm] is op4=0x4 & rd      & imm8   [ imm = imm8*2; ]   { rd = sext(*:2 ((inst_start & ~1) + 4 + imm:4)); }
+:ldr rd,["pc",#imm]  is op4=0x5 & rd      & imm8   [ imm = imm8*4; ]   { rd = *((inst_start & ~3) + 4 + imm:4); }
+:ldr rd,[rs,#imm]    is op4=0x6 & rd & rs & imm4   [ imm = imm4*4; ]   { rd = *(rs + imm); }
+:str rs,[rd,#imm]    is op4=0x7 & rd & rs & imm4   [ imm = imm4*4; ]   { *(rd + imm) = rs; }
+:cmp.eq rd,#imm8s    is op4=0x8 & rd      & imm8s                      { fr = rd == imm8s; }
+:mov rd,#imm8s       is op4=0x9 & rd      & imm8s                      { rd = imm8s; }
+:add rd,#imm8s       is op4=0xa & rd      & imm8s                      { rd = rd + imm8s; }
+:b "pc",#imm         is op4=0xb           & imm12s [ imm = imm12s*2; ] { goto [inst_start + 4 + imm:4]; }
+:bfs "pc",#imm       is op4=0xc           & imm12s [ imm = imm12s*2; ] { if (!fr) goto <skip>; goto [inst_start + 4 + imm:4]; <skip> }
+:bfc "pc",#imm       is op4=0xd           & imm12s [ imm = imm12s*2; ] { if (fr)  goto <skip>; goto [inst_start + 4 + imm:4]; <skip> }
+
+:lsl rd,#imm5 is op7=0x78 & rd & imm5 { rd = rd << imm5; }
+:lsr rd,#imm5 is op7=0x79 & rd & imm5 { rd = rd >> imm5; }
+:asr rd,#imm5 is op7=0x7a & rd & imm5 { rd = rd s>> imm5; }

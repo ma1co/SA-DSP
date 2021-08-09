@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="SA-DSP"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="dsp.sla"
+            processorspec="dsp.pspec"
+            id="SA-DSP:LE:32:default">
+    <description>Sony Alpha DSP 32-bit little-endian</description>
+    <compiler name="default" spec="dsp.cspec" id="default"/>
+  </language>
+</language_definitions>
